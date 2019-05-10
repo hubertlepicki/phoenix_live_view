@@ -71,14 +71,18 @@ defmodule Phoenix.LiveView.Channel do
     %{"value" => raw_val, "event" => event, "type" => type} = msg.payload
     val = decode(type, raw_val)
 
+    IO.inspect msg.payload
+
     {val, state} =
       case msg.payload do
-        %{"file_ref" => file_ref, "upload_channel" => topic} ->
+        %{"file_count" => file_count} ->
+          file_ref = "";
           {pid, uploads} = Map.pop(state.uploads, topic)
            {:ok, path} = GenServer.call(pid, {:get_file, file_ref})
 
            # TODO: find/replace the file ref (__PHX_FILE__)
-           subpath = find_file(val, file_ref, [])
+           subpath = find_file(val, file_ref, nil)
+           IO.inspect subpath
            {put_in(val, subpath ++ ["path"], path), %{state | uploads: uploads}}
         _ -> {val, state}
       end
@@ -105,8 +109,8 @@ defmodule Phoenix.LiveView.Channel do
   def handle_call({@prefix, :register_file_upload, %{pid: pid, ref: ref}}, _from, state) do
     Process.monitor(pid)
     # TODO: get that from config
-    if (Enum.count(state.uploads)) > 0 do
-      {:error, :limit_exceeded}
+    if (Enum.count(state.uploads)) > 3 do
+      {:reply. {:error, :limit_exceeded}, state}
     else
       state = %{state | uploads: Map.put(state.uploads, ref, pid)}
       {:reply, :ok, state}
@@ -362,15 +366,18 @@ defmodule Phoenix.LiveView.Channel do
   end
 
   @doc false
-  def find_file(%{"__PHX_FILE__" => ref}, _ref, path), do: Enum.reverse(path)
-  def find_file(params, _ref, path) when not is_map(params), do: nil
+  def find_file(params, ref, nil), do: find_file(params, ref, [])
+  def find_file(%{"__PHX_FILE__" => ref}, _ref, path), do: {:ok, path}
+  def find_file(params, _ref, _path) when not is_map(params), do: nil
 
   def find_file(params, _ref, path) do
-    Enum.reduce_while(params, path, fn {key, sub_params}, acc ->
-      case find_file(sub_params, _ref, [key | acc]) do
-        nil -> {:cont, acc}
-        path -> {:halt, path}
-      end
+    Enum.reduce(params, {path, []}, fn {key, sub_params}, {path_acc, found_acc} ->
+      next_path = [key | path_acc]
+      IO.inspect(found_acc, label: :found)
+      case find_file(sub_params, _ref, next_path) |> IO.inspect do
+        {:ok, path} -> {path_acc, [path | found_acc]}
+        _ -> {path_acc, found_acc}
+      end |> IO.inspect(label: next_path)
     end)
   end
 end

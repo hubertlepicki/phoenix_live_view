@@ -21,7 +21,7 @@ defmodule Phoenix.LiveView.UploadChannel do
   end
 
   def handle_in("event", {:frame, payload}, socket) do
-    {:reply, {:ok, %{file_ref: "1"}}, add_frame(socket, payload)}
+    {:reply, {:ok, %{file_ref: socket.join_ref}}, add_frame(socket, payload)}
   end
 
   defp add_frame(socket, frame) do
