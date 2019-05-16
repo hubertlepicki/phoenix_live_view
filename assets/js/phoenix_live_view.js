@@ -115,6 +115,7 @@ own DOM operations.
 
 import morphdom from "morphdom"
 import {Socket} from "phoenix"
+var jsondiffpatch = require('jsondiffpatch').create({});
 
 const PHX_VIEW = "data-phx-view"
 const PHX_CONNECTED_CLASS = "phx-connected"
@@ -665,6 +666,7 @@ export class View {
     this.gracefullyClosed = false
     this.el = el
     this.loader = this.el.nextElementSibling
+    this.lastPayload = null;
     this.id = this.el.id
     this.view = this.el.getAttribute(PHX_VIEW)
     this.channel = this.liveSocket.channel(`lv:${this.id}`, () => {
@@ -752,8 +754,20 @@ export class View {
     this.newChildrenAdded = true
   }
 
+  savePayload(payload) {
+    this.lastPayload = payload;
+  }
+
+  updatePayload(diff) {
+    const newPayload = jsondiffpatch.patch(this.lastPayload, diff)
+    this.lastPayload = newPayload;
+    this.update(newPayload);
+  }
+
   bindChannel(){
     this.channel.on("render", (diff) => this.update(diff))
+    this.channel.on("render", (diff) => this.savePayload(diff))
+    this.channel.on("render_diff", (diff) => this.updatePayload(diff))
     this.channel.on("redirect", ({to, flash}) => Browser.redirect(to, flash))
     this.channel.on("session", ({token}) => this.el.setAttribute(PHX_SESSION, token))
     this.channel.onError(reason => this.onError(reason))

@@ -208,6 +208,20 @@ defmodule Phoenix.LiveView.Channel do
     state
   end
 
+  defp push(state, "render", payload) do
+    message = %Message{topic: state.topic, event: "render", payload: payload}
+
+    message_to_send = case state[:previous_payload] do
+      nil -> message
+      previous_payload ->
+        diff = JsonDiffEx.diff(state.previous_payload, message.payload)
+        %Message{topic: state.topic, event: "render_diff", payload: diff}
+    end
+
+    send(state.transport_pid, state.serializer.encode!(message_to_send))
+    Map.put(state, :previous_payload, message.payload)
+  end
+
   defp push(state, event, payload) do
     message = %Message{topic: state.topic, event: event, payload: payload}
     send(state.transport_pid, state.serializer.encode!(message))
